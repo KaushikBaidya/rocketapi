@@ -1,6 +1,8 @@
 import express from "express";
-import { createPool } from "mysql";
+import mysql, { createPool } from "mysql";
+import bcrypt from "bcrypt";
 import * as dotenv from "dotenv";
+
 dotenv.config();
 
 const DB_HOST = process.env.DB_HOST;
@@ -8,6 +10,8 @@ const DB_USER = process.env.DB_USER;
 const DB_DATABASE = process.env.DB_DATABASE;
 const DB_PORT = process.env.DB_PORT;
 const port = process.env.PORT;
+
+const app = express();
 
 const db = createPool({
   connectionLimit: 100,
@@ -17,7 +21,73 @@ const db = createPool({
   database: DB_DATABASE,
   port: DB_PORT,
 });
-const app = express();
+
+app.use(express.json());
+//middleware to read req.body.<params>
+
+//CREATE USER
+app.post("/createUser", async (req, res) => {
+  const user = req.body.name;
+  const hashedPassword = await bcrypt.hash(req.body.password, 10);
+  db.getConnection(async (err, connection) => {
+    if (err) throw err;
+    const sqlSearch = "SELECT * FROM userTable WHERE user = ?";
+    const search_query = mysql.format(sqlSearch, [user]);
+    const sqlInsert = "INSERT INTO userTable VALUES (0,?,?)";
+    const insert_query = mysql.format(sqlInsert, [user, hashedPassword]);
+    // ? will be replaced by values
+    // ?? will be replaced by string
+    await connection.query(search_query, async (err, result) => {
+      if (err) throw err;
+      console.log("------> Search Results");
+      console.log(result.length);
+      if (result.length != 0) {
+        connection.release();
+        console.log("------> User already exists");
+        res.sendStatus(409);
+      } else {
+        await connection.query(insert_query, (err, result) => {
+          connection.release();
+          if (err) throw err;
+          console.log("--------> Created new User");
+          console.log(result.insertId);
+          res.sendStatus(201);
+        });
+      }
+    }); //end of connection.query()
+  }); //end of db.getConnection()
+});
+
+//LOGIN (AUTHENTICATE USER)
+app.post("/login", (req, res) => {
+  const user = req.body.name;
+  const password = req.body.password;
+  db.getConnection(async (err, connection) => {
+    if (err) throw err;
+    const sqlSearch = "Select * from userTable where user = ?";
+    const search_query = mysql.format(sqlSearch, [user]);
+    await connection.query(search_query, async (err, result) => {
+      connection.release();
+
+      if (err) throw err;
+      if (result.length == 0) {
+        console.log("--------> User does not exist");
+        res.sendStatus(404);
+      } else {
+        const hashedPassword = result[0].password;
+        //get the hashedPassword from result
+        if (await bcrypt.compare(password, hashedPassword)) {
+          console.log("---------> Login Successful");
+          res.send(`${user} is logged in!`);
+        } else {
+          console.log("---------> Password Incorrect");
+          res.send("Password incorrect!");
+        } //end of bcrypt.compare()
+      } //end of User exists i.e. results.length==0
+    }); //end of connection.query()
+  }); //end of db.connection()
+}); //end of app.post()
+
 app.listen(port, () => console.log(`Server Started on port ${port}...`));
 
 db.getConnection((err, connection) => {
