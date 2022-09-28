@@ -1,15 +1,21 @@
 import express from "express";
-const app = express();
-
 import { createPool } from "mysql";
+import * as dotenv from "dotenv";
+dotenv.config();
+
+const app = express();
+const DB_HOST = process.env.DB_HOST;
+const DB_USER = process.env.DB_USER;
+const DB_DATABASE = process.env.DB_DATABASE;
+const DB_PORT = process.env.DB_PORT;
 
 const db = createPool({
   connectionLimit: 100,
-  host: "127.0.0.1", //This is your localhost IP
-  user: "newuser", // "newuser" created in Step 1(e)
-  password: "password1#", // password for the new user
-  database: "userDB", // Database name
-  port: "3306", // port name, "3306" by default
+  connectionLimit: 100,
+  host: DB_HOST,
+  user: DB_USER,
+  database: DB_DATABASE,
+  port: DB_PORT,
 });
 
 db.getConnection((err, connection) => {
